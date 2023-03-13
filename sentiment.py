@@ -1,84 +1,107 @@
-from textblob import TextBlob
 import pandas as pd
-import matplotlib.pyplot as plt
 import re
+import string
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import os
 
-def sentiment_analysis(mergedD, keyword_file):
-    # Read the CSV file containing tweets
-    df = pd.read_csv(mergedD, header=None, names=['Text'])
 
-    # Read the CSV file containing keywords to ignore
-    keywords = pd.read_csv(keyword_file, header=None, names=['Keyword'])
-    ignore_list = keywords['Keyword'].tolist()
+import matplotlib.pyplot as plt
 
-    # Create a list of negation words
-    negation_list = ["not", "n't", "no"]
 
-    # Create a function to clean and process the tweets
-    def process_tweet(tweet):
-        # Convert the tweet to lowercase
-        tweet = tweet.lower()
+def process_tweet(tweet, keywords_file):
+    # Convert to lower case
+    tweet = tweet.lower()
 
-        # Replace contractions with their full form
-        tweet = re.sub(r"won\'t", "will not", tweet)
-        tweet = re.sub(r"can\'t", "can not", tweet)
+    # Remove URLs
+    tweet = re.sub(r"http\S+|www\S+|https\S+", '', tweet, flags=re.MULTILINE)
 
-        # Split the tweet into words
-        words = tweet.split()
+    # Remove user @ references and '#' from hashtags
+    tweet = re.sub(r'\@\w+|\#', '', tweet)
 
-        # Initialize a flag to check for negation
-        negation_flag = False
+    # Remove punctuation
+    tweet = tweet.translate(str.maketrans('', '', string.punctuation))
 
-        # Remove keywords from the ignore list
-        processed_tweet = []
-        for word in words:
-            if word in ignore_list:
-                continue
-            if word in negation_list:
-                negation_flag = True
-            else:
-                if negation_flag:
-                    word = "not_" + word
-                    negation_flag = False
-                processed_tweet.append(word)
+    # Remove numbers
+    tweet = re.sub(r'\d+', '', tweet)
 
-        # Join the processed words back into a tweet
-        processed_tweet = " ".join(processed_tweet)
+    # Remove extra white space
+    tweet = tweet.strip()
+    tweet = re.sub('\s+', ' ', tweet)
 
-        return processed_tweet
+    # Remove words in keywords_file
+    with open(keywords_file, 'r') as f:
+        keywords = f.read().splitlines()
+    tweet = ' '.join(word for word in tweet.split() if word not in keywords)
 
-    # Apply the process_tweet function to the 'Text' column of the DataFrame
-    df['Text'] = df['Text'].apply(process_tweet)
+    # Check for positive and negative emojis
+    positive_emojis = [':)', ':D', ':]', ';)', ':*', ':p', ':P', '😊', '😃', '🤗', '😍', 
+                       '😘', '😇', '🤩', '🥳', '🙌', '👍', '💖', '💯', '🔥', '😁', '😆',
+                        '😂', '🤣', '😜', '😎', '🎉', '❤️', '👏', '👌', '✨', '🌟', '🌈',
+                          '🍕', '🍔', '🍟', '🍩', '🍭', '🎂', '🎈', '🎁', '🎊', '👑', '💐', 
+                          '🌹', '🌺', '🌸', '🌷', '🌻', '🌼', '🐶', '🐱', '🦊', '🐻', '🐨',
+                          '🐯', '🐰', '🦁', '🦄', '🐴', '🐮', '🐷', '🐒', '🐥', '🐟', '🦀']
 
-    # Create a function to classify each tweet as positive, negative, or neutral
-    def classify_tweet(tweet):
-        # Use TextBlob to classify the tweet
-        sentiment = TextBlob(tweet).sentiment.polarity
+    negative_emojis = [':(', ':/', ':\\', ':|', ':O', ':S', ':@', '😔', '😞', '😒', '😠',
+                       '😡', '😩', '😓', '😖', '😠', '🤬', '🙄', '💔', '👎', '😢', '😭', '😕',
+                       '🤢', '🤕', '💀', '👻', '😱', '😨', '👿', '💩', '👺', '👹', '🤮', '🥴',
+                         '🥺', '😿', '🔪', '💣', '🚫', '🐍', '🕷️', '🦂', '🐀', '🦠', '🌪️', '🔥']
 
-        # Check for negation
-        negation = re.findall(r"not_\w+", tweet)
-        if negation:
-            sentiment = -sentiment
 
-        # Classify the tweet as positive, negative, or neutral based on the sentiment score
-        if sentiment > 0:
-            return 'Positive'
-        elif sentiment < 0:
-            return 'Negative'
-        else:
-            return 'Neutral'
 
-    # Apply the classify_tweet function to the 'Text' column of the DataFrame
-    df['Sentiment'] = df['Text'].apply(classify_tweet)
+    positive_emoji_count = 0
+    negative_emoji_count = 0
+    for c in tweet:
+        if c in positive_emojis:
+            positive_emoji_count += 1
+        elif c in negative_emojis:
+            negative_emoji_count += 1
 
-    # Count the number of tweets for each sentiment
+    return tweet, positive_emoji_count, negative_emoji_count
+
+
+def calculate_sentiment_score(tweet, analyzer):
+    # Calculate sentiment score using VADER
+    score = analyzer.polarity_scores(tweet)['compound']
+
+    return score
+
+
+def sentiment_analysis(data_file, keywords_file):
+    # Load data
+    df = pd.read_csv(data_file)
+
+    # Get filename without extension
+    filename = data_file.split(".")[0]
+
+    # Initialize VADER sentiment analyzer
+    analyzer = SentimentIntensityAnalyzer()
+
+    # Process tweets
+    df['Text'], df['Positive Emojis'], df['Negative Emojis'] = zip(
+        *df.iloc[:, 0].apply(lambda x: process_tweet(x, keywords_file)))
+
+    # Calculate sentiment score for each tweet
+    df['Sentiment Score'] = df['Text'].apply(lambda tweet: calculate_sentiment_score(tweet, analyzer))
+
+    # Add sentiment score for emojis
+    df['Sentiment Score'] += df['Positive Emojis'] - df['Negative Emojis']
+
+    # Categorize tweets as positive, negative, or neutral
+    df['Sentiment'] = df['Sentiment Score'].apply(lambda score: 'positive' if score > 0 else (
+        'negative' if score < 0 else 'neutral'))
+
+    # Output results
+    output_file = f'sentiment_analysis_results_{filename}.csv'
+    df.to_csv(output_file, index=False)
+    print(f'Sentiment analysis complete. Results saved to {output_file}')
+
+    # Generate pie chart for sentiment distribution
     sentiment_counts = df['Sentiment'].value_counts()
-
-    # Plot the sentiment counts as a pie chart
-    plt.pie(sentiment_counts, labels=sentiment_counts.index, startangle=90,
-            autopct='%1.1f%%', shadow=True)
-    plt.axis('equal')
+    plt.pie(sentiment_counts, labels=sentiment_counts.index, autopct='%1.1f%%')
+    plt.title(f'Sentiment Distribution for {filename}')
     plt.show()
 
-# Call the sentiment_analysis function, passing the name of the CSV file and keyword file as arguments
-sentiment_analysis('mergedD.csv', 'keywords.csv')
+# Analyze sentiment for each file
+files = ['Trump.csv', 'Musk.csv', 'Biden.csv', 'Tesla.csv', 'SpaceX.csv']
+for file in files:
+    sentiment_analysis(file, 'keywords.csv')
