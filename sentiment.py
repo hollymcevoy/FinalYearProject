@@ -4,11 +4,11 @@ import string
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import os
 
-
 import matplotlib.pyplot as plt
 
 
 def process_tweet(tweet, keywords_file):
+    
     # Convert to lower case
     tweet = tweet.lower()
 
@@ -39,13 +39,12 @@ def process_tweet(tweet, keywords_file):
                         '😂', '🤣', '😜', '😎', '🎉', '❤️', '👏', '👌', '✨', '🌟', '🌈',
                           '🍕', '🍔', '🍟', '🍩', '🍭', '🎂', '🎈', '🎁', '🎊', '👑', '💐', 
                           '🌹', '🌺', '🌸', '🌷', '🌻', '🌼', '🐶', '🐱', '🦊', '🐻', '🐨',
-                          '🐯', '🐰', '🦁', '🦄', '🐴', '🐮', '🐷', '🐒', '🐥', '🐟', '🦀']
+                          '🐯', '🐰', '🦁', '🦄', '🐴', '🐮', '🐷', '🐒', '🐥', '🐟', '❣️','🦀','🔥']
 
     negative_emojis = [':(', ':/', ':\\', ':|', ':O', ':S', ':@', '😔', '😞', '😒', '😠',
-                       '😡', '😩', '😓', '😖', '😠', '🤬', '🙄', '💔', '👎', '😢', '😭', '😕',
-                       '🤢', '🤕', '💀', '👻', '😱', '😨', '👿', '💩', '👺', '👹', '🤮', '🥴',
-                         '🥺', '😿', '🔪', '💣', '🚫', '🐍', '🕷️', '🦂', '🐀', '🦠', '🌪️', '🔥']
-
+                       '😡', '😩', '😓', '😖','🙃', '😠', '🤬', '🙄', '💔', '👎', '😢', '🤔', '😏','😭', '😕',
+                       '🤢', '🤕', '💀', '👻', '😱', '😨', '👿', '🤷‍♀️', '💩', '👺', '👹', '🤮', '🥴',
+                         '🥺', '😿', '🔪', '💣', '🚫', '🐍', '🕷️', '🦂', '🐀', '🦠', '🌪️', '🤡', '🤦🏻‍♀️']
 
 
     positive_emoji_count = 0
@@ -67,11 +66,10 @@ def calculate_sentiment_score(tweet, analyzer):
 
 
 def sentiment_analysis(data_file, keywords_file):
-    # Load data
+    # Load first 1000 rows of data
     df = pd.read_csv(data_file)
-
     # Get filename without extension
-    filename = data_file.split(".")[0]
+    filename = os.path.splitext(data_file)[0]
 
     # Initialize VADER sentiment analyzer
     analyzer = SentimentIntensityAnalyzer()
@@ -87,21 +85,35 @@ def sentiment_analysis(data_file, keywords_file):
     df['Sentiment Score'] += df['Positive Emojis'] - df['Negative Emojis']
 
     # Categorize tweets as positive, negative, or neutral
-    df['Sentiment'] = df['Sentiment Score'].apply(lambda score: 'positive' if score > 0 else (
-        'negative' if score < 0 else 'neutral'))
+    df['Sentiment'] = df['Sentiment Score'].apply(lambda score: 'positive' if score > 0.000000001 else (
+        'negative' if score < -0.000000001 else 'neutral'))
+
 
     # Output results
     output_file = f'sentiment_analysis_results_{filename}.csv'
     df.to_csv(output_file, index=False)
     print(f'Sentiment analysis complete. Results saved to {output_file}')
 
-    # Generate pie chart for sentiment distribution
-    sentiment_counts = df['Sentiment'].value_counts()
-    plt.pie(sentiment_counts, labels=sentiment_counts.index, autopct='%1.1f%%')
-    plt.title(f'Sentiment Distribution for {filename}')
+    # Extract counts of each sentiment type
+    positive_count = (df['Sentiment'] == 'positive').sum()
+    negative_count = (df['Sentiment'] == 'negative').sum()
+    neutral_count = (df['Sentiment'] == 'neutral').sum()
+
+    # Create data for the pie chart
+    labels = ['Positive', 'Negative', 'Neutral']
+    sizes = [positive_count, negative_count, neutral_count]
+    colors = ['#02ce3d',  '#e55f4f', '#f9e624']
+
+    # Plot the pie chart
+    plt.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
+
+    # Add a title to the pie chart
+    plt.title('Sentiment Distribution')
+
+    # Show the plot
     plt.show()
 
 # Analyze sentiment for each file
-files = ['Trump.csv', 'Musk.csv', 'Biden.csv', 'Tesla.csv', 'SpaceX.csv']
+files = ['SpaceX.csv', 'SpaceXTweet.csv']
 for file in files:
     sentiment_analysis(file, 'keywords.csv')

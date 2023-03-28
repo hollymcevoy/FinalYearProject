@@ -22,5 +22,5 @@ def save_to_csv(data, filename):
         for tweet in data:
             writer.writerow([tweet])
 
-deleted_tweets = compare_text_files("elon10.txt", "elonNew10.txt")
+deleted_tweets = compare_text_files("elonNew10.txt", "elonN10.txt")
 save_to_csv(deleted_tweets, "deletedE.csv")

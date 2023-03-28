@@ -1,22 +1,35 @@
 import os
+import csv
+import hashlib
 
-# specify the directory where the text files are stored
-directory = r"C:\Users\holly\OneDrive\Documents\FinalYearProject\Elon\DataElon"
+def read_file(path):
+    encodings = ['utf-8', 'iso-8859-1']  # list of encodings to try
+    for enc in encodings:
+        try:
+            with open(path, 'r', encoding=enc) as file:
+                return file.read()
+        except Exception as e:
+            pass  # try the next encoding
+    # if we get here, none of the encodings worked
+    print(f"Error reading file: {path}")
+    return ""
 
-# create a list to store the contents of the text files
-texts = []
+folder_path = 'C:/Users/holly/OneDrive/Documents/FinalYearProject/Data/Elon/DataElon'
 
-# iterate over the files in the directory
-for filename in os.listdir(directory):
-    file_path = os.path.join(directory, filename)
-    with open(file_path, 'r', encoding='utf-8') as f:
-        # add the contents of each file to the list
-        texts.append(f.read())
+file_contents = {}
+for filename in os.listdir(folder_path):
+    file_path = os.path.join(folder_path, filename)
+    if os.path.isfile(file_path):
+        content = read_file(file_path)
+        hash_value = hashlib.md5(content.encode('utf-8')).hexdigest()
+        if hash_value not in file_contents:
+            file_contents[hash_value] = content
 
-# convert the list to a set to remove duplicates
-texts = set(texts)
-
-# write the unique contents to a single file
-with open(r'C:\Users\holly\OneDrive\Documents\FinalYearProject\Elon\merged_data.txt', 'w', encoding='utf-8') as f:
-    for text in texts:
-        f.write(text)
+output_path = 'C:/Users/holly/OneDrive/Documents/FinalYearProject/Data/Elon/DataElon/MuskTweet.csv'
+with open(output_path, 'w', newline='', encoding='utf-8') as output_file:
+    writer = csv.writer(output_file, quoting=csv.QUOTE_MINIMAL)
+    for content in file_contents.values():
+        for tweet in content.split('\n'):
+            if tweet.strip() != '':
+                tweet_id = str(hash(tweet))[:10]
+                writer.writerow([f'"{tweet_id} {tweet.strip()}"'])
